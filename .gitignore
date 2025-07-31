@@ -1,0 +1,35 @@
+# Ignora todos os diretórios de build
+[Dd]ebug/
+[Rr]elease/
+bin/
+obj/
+
+# Ignora pacotes de NuGet e arquivos de restore
+.nuget/
+*.suo
+*.user
+*.pdb
+*.suo
+*.vspscc
+
+# Ignora arquivos de usuário do Visual Studio
+*.csproj.user
+*.sln.docstates
+*.vshost.*
+
+# Ignora arquivos de teste
+TestResults/
+*.trx
+
+# Ignora o cache do IDE e arquivos temporários
+.vs/
+.vscode/
+
+# Ignora arquivos de log e configuração de ambiente
+*.log
+*.sqlite
+appsettings.Development.json
+appsettings.Production.json
+
+# Ignora o cache do .NET
+.dotnet/
