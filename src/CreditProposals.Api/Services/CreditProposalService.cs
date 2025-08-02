@@ -1,21 +1,27 @@
 ﻿using Contracts.Events;
+using Core.Configurations;
 using Core.Messaging;
 using Core.Services;
+using Microsoft.Extensions.Options;
 
 namespace CreditProposals.Api.Services;
 
 public class CreditProposalService : ICreditProposalService
 {
     private readonly IEventPublisher _eventPublisher;
+    private readonly RabbitMQSettings _rabbitMQSettings;
+    private readonly ILogger<CreditProposalService> _logger;
 
-    public CreditProposalService(IEventPublisher eventPublisher)
+    public CreditProposalService(IEventPublisher eventPublisher, IOptions<RabbitMQSettings> settings, ILogger<CreditProposalService> logger)
     {
         _eventPublisher = eventPublisher;
+        _rabbitMQSettings = settings.Value;
+        _logger = logger;
     }
 
     public async Task ProcessCreditProposalAsync(ClientCreatedEvent clientCreatedEvent)
     {
-        Console.WriteLine($"[INFO] Recebido evento para cliente: {clientCreatedEvent.ClientId}");
+        _logger.LogInformation("[INFO] Recebido evento para cliente: {ClientId}", clientCreatedEvent.ClientId);
 
         var isApproved = new Random().Next(0, 10) > 3;
         var creditLimit = isApproved ? (decimal)new Random().Next(1000, 10000) : 0;
@@ -28,7 +34,7 @@ public class CreditProposalService : ICreditProposalService
             status: status
         );
 
-        await _eventPublisher.PublishAsync(creditProposalEvent, "creditproposals.exchange", "credit.proposal.created");
-        Console.WriteLine($"[INFO] Proposta de crédito gerada para o cliente {clientCreatedEvent.ClientId}. Status: {status}");
+        await _eventPublisher.PublishAsync(creditProposalEvent, _rabbitMQSettings.CreditProposalExchange, _rabbitMQSettings.CreditProposalRoutingKey);
+        _logger.LogInformation("[INFO] Proposta de crédito gerada para o cliente {ClientId}. Status: {Status}", clientCreatedEvent.ClientId, status);
     }
 }

@@ -6,32 +6,28 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text.Json;
 using System.Text;
+using Core.Configurations;
+using Microsoft.Extensions.Options;
 
 namespace CreditProposals.Api.BackgroundServices;
 
 public class ClientCreatedEventConsumerService : BackgroundService
 {
     private readonly RabbitMQConsumer _consumer;
-    private readonly IServiceProvider _serviceProvider; // Injetar o provedor de serviços
-    private readonly string _queueName = "client.created.queue";
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<ClientCreatedEventConsumerService> _logger;
 
-    public ClientCreatedEventConsumerService(RabbitMQConsumer consumer, IServiceProvider serviceProvider)
+    public ClientCreatedEventConsumerService(RabbitMQConsumer consumer, IServiceProvider serviceProvider, ILogger<ClientCreatedEventConsumerService> logger)
     {
         _consumer = consumer;
         _serviceProvider = serviceProvider;
+        _logger = logger;
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         IChannel channel = _consumer.Channel;
         var consumer = new AsyncEventingBasicConsumer(channel);
-
-
-        channel.QueueBindAsync(
-            queue: _queueName,
-            exchange: "customers.exchange",
-            routingKey: "client.created"
-        ).Wait();
 
         consumer.ReceivedAsync += async (model, ea) =>
         {
@@ -54,12 +50,12 @@ public class ClientCreatedEventConsumerService : BackgroundService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ERRO] Falha ao processar mensagem: {ex.Message}");
-                _consumer.Nack(ea.DeliveryTag);
+                _logger.LogError(ex, "Falha ao processar mensagem.");
+                _consumer.Reject(ea.DeliveryTag, false);
             }
         };
 
-        channel.BasicConsumeAsync(queue: _queueName, autoAck: false, consumer: consumer);
+        channel.BasicConsumeAsync(queue: _consumer.QueueName, autoAck: false, consumer: consumer);
 
         return Task.CompletedTask;
     }

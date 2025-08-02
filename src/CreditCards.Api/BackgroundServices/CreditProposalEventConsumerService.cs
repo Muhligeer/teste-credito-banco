@@ -5,6 +5,8 @@ using RabbitMQ.Client;
 using System.Text;
 using System.Text.Json;
 using Contracts.Events;
+using Core.Configurations;
+using Microsoft.Extensions.Options;
 
 namespace CreditCards.Api.BackgroundServices;
 
@@ -12,23 +14,18 @@ public class CreditProposalEventConsumerService : BackgroundService
 {
     private readonly RabbitMQConsumer _consumer;
     private readonly IServiceProvider _serviceProvider;
-    private readonly string _queueName = "credit.proposal.queue";
+    private readonly ILogger<CreditProposalEventConsumerService> _logger;
 
-    public CreditProposalEventConsumerService(RabbitMQConsumer consumer, IServiceProvider serviceProvider)
+    public CreditProposalEventConsumerService(RabbitMQConsumer consumer, IServiceProvider serviceProvider, ILogger<CreditProposalEventConsumerService> logger)
     {
         _consumer = consumer;
         _serviceProvider = serviceProvider;
+        _logger = logger;
     }
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         IChannel channel = _consumer.Channel;
-
-        channel.QueueBindAsync(
-            queue: _queueName,
-            exchange: "creditproposals.exchange",
-            routingKey: "credit.proposal.created"
-        ).Wait();
 
         var consumer = new AsyncEventingBasicConsumer(channel);
 
@@ -53,12 +50,12 @@ public class CreditProposalEventConsumerService : BackgroundService
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ERRO] Falha ao processar mensagem: {ex.Message}");
-                _consumer.Nack(ea.DeliveryTag);
+                _logger.LogError(ex, "Falha ao processar mensagem.");
+                _consumer.Reject(ea.DeliveryTag, false);
             }
         };
 
-        channel.BasicConsumeAsync(queue: _queueName, autoAck: false, consumer: consumer);
+        channel.BasicConsumeAsync(queue: _consumer.QueueName, autoAck: false, consumer: consumer);
 
         return Task.CompletedTask;
     }

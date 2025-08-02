@@ -1,21 +1,27 @@
 ﻿using Contracts.Events;
+using Core.Configurations;
 using Core.Messaging;
 using Core.Services;
+using Microsoft.Extensions.Options;
 
 namespace CreditCards.Api.Services;
 
 public class CreditCardService : ICreditCardService
 {
     private readonly IEventPublisher _eventPublisher;
+    private readonly RabbitMQSettings _rabbitMQSettings;
+    private readonly ILogger<CreditCardService> _logger;
 
-    public CreditCardService(IEventPublisher eventPublisher)
+    public CreditCardService(IEventPublisher eventPublisher, IOptions<RabbitMQSettings> settings, ILogger<CreditCardService> logger)
     {
         _eventPublisher = eventPublisher;
+        _rabbitMQSettings = settings.Value;
+        _logger = logger;
     }
 
     public async Task IssueCreditCardAsync(CreditProposalCreatedEvent creditProposalEvent)
     {
-        Console.WriteLine($"[INFO] Recebido evento de proposta de crédito para o cliente: {creditProposalEvent.ClientId}");
+        _logger.LogInformation("[INFO] Recebido evento de proposta de crédito para o cliente: {ClientId}.", creditProposalEvent.ClientId);
 
         if (creditProposalEvent.Status == "Approved")
         {
@@ -27,12 +33,12 @@ public class CreditCardService : ICreditCardService
             );
 
             // Publica o evento de cartão emitido
-            await _eventPublisher.PublishAsync(creditCardIssuedEvent, "creditcards.exchange", "credit.card.issued");
-            Console.WriteLine($"[INFO] Cartão emitido para o cliente {creditProposalEvent.ClientId}.");
+            await _eventPublisher.PublishAsync(creditCardIssuedEvent, _rabbitMQSettings.CreditCardsExchange, _rabbitMQSettings.CreditCardIssuedRoutingKey);
+            _logger.LogInformation("[INFO] Cartão emitido para o cliente {ClientId}.", creditProposalEvent.ClientId);
         }
         else
         {
-            Console.WriteLine($"[INFO] Proposta negada para o cliente {creditProposalEvent.ClientId}. Nenhum cartão foi emitido.");
+            _logger.LogInformation("[INFO] Proposta negada para o cliente {ClientId}.", creditProposalEvent.ClientId);
         }
     }
 }

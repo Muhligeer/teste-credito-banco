@@ -1,18 +1,24 @@
 ﻿using Contracts.DTOs;
 using Contracts.Events;
+using Core.Configurations;
 using Core.Messaging;
 using Core.Models;
 using Core.Services;
+using Microsoft.Extensions.Options;
 
 namespace Customers.Api.Services;
 
 public class CustomerService : ICustomerService
 {
     private readonly IEventPublisher _eventPublisher;
+    private readonly RabbitMQSettings _rabbitMQSettings;
+    private readonly ILogger<CustomerService> _logger;
 
-    public CustomerService(IEventPublisher eventPublisher)
+    public CustomerService(IEventPublisher eventPublisher, IOptions<RabbitMQSettings> settings, ILogger<CustomerService> logger)
     {
         _eventPublisher = eventPublisher;
+        _rabbitMQSettings = settings.Value;
+        _logger = logger;
     }
 
     public async Task<CustomerResponse> CreateCustomerAsync(CustomerRequest request)
@@ -28,9 +34,9 @@ public class CustomerService : ICustomerService
             email: customer.Email
         );
 
-        await _eventPublisher.PublishAsync(clientCreatedEvent, "customers.exchange", "client.created");
+        await _eventPublisher.PublishAsync(clientCreatedEvent, _rabbitMQSettings.CustomerExchange, _rabbitMQSettings.ClientCreatedRoutingKey);
 
-        Console.WriteLine($"[INFO] Cliente {customer.Id} criado e evento publicado.");
+        _logger.LogInformation("[INFO] Cliente {CustomerId} criado e evento publicado.", customer.Id);
 
         return new CustomerResponse(customer.Id, customer.Name, customer.Document, customer.Email);
     }

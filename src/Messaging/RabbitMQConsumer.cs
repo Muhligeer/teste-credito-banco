@@ -1,28 +1,32 @@
 ﻿using Core.Messaging;
 using RabbitMQ.Client;
+using System.Data.Common;
 
 namespace Messaging;
 
 public class RabbitMQConsumer : IEventConsumer
 {
     public IChannel Channel { get; }
-    private readonly IConnection _connection;
+    public string QueueName { get; }
 
-    public RabbitMQConsumer(IConnection connection, string queueName)
+    public RabbitMQConsumer(IConnection connection, string queueName, string exchangeName, string routingKey, string deadLetterExchangeName, string deadLetterQueueName)
     {
-        _connection = connection;
+        Channel = Task.Run(async () => await connection.CreateChannelAsync()).Result;
+        QueueName = queueName;
 
-        // Cria o canal de forma assíncrona
-        Channel = Task.Run(async () => await _connection.CreateChannelAsync()).Result;
+        Task.Run(async () => await Channel.ExchangeDeclareAsync(exchangeName, type: "topic", durable: true)).Wait();
 
-        // Declara a fila de forma assíncrona
-        Task.Run(async () => await Channel.QueueDeclareAsync(
-            queue: queueName,
-            durable: true,
-            exclusive: false,
-            autoDelete: false,
-            arguments: null
-        )).Wait();
+        Task.Run(async () => await Channel.ExchangeDeclareAsync(deadLetterExchangeName, type: "fanout", durable: true)).Wait();
+        Task.Run(async () => await Channel.QueueDeclareAsync(deadLetterQueueName, durable: true, exclusive: false, autoDelete: false)).Wait();
+        Task.Run(async () => await Channel.QueueBindAsync(deadLetterQueueName, deadLetterExchangeName, "")).Wait();
+
+        var queueArgs = new Dictionary<string, object>
+            {
+                { "x-dead-letter-exchange", deadLetterExchangeName }
+            };
+        Task.Run(async () => await Channel.QueueDeclareAsync(queue: queueName, durable: true, exclusive: false, autoDelete: false, arguments: queueArgs)).Wait();
+
+        Task.Run(async () => await Channel.QueueBindAsync(queueName, exchangeName, routingKey)).Wait();
     }
 
     public void Ack(ulong deliveryTag)
@@ -30,8 +34,8 @@ public class RabbitMQConsumer : IEventConsumer
         Channel.BasicAckAsync(deliveryTag, false);
     }
 
-    public void Nack(ulong deliveryTag)
+    public void Reject(ulong deliveryTag, bool requeue)
     {
-        Channel.BasicNackAsync(deliveryTag, false, false);
+        Channel.BasicRejectAsync(deliveryTag, requeue);
     }
 }
