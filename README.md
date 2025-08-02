@@ -30,7 +30,7 @@ As instruções abaixo permitem iniciar toda a solução com apenas um comando, 
 
 1.  Clone este repositório para sua máquina local:
     ```bash
-    git clone
+    git clone https://github.com/Muhligeer/teste-credito-banco.git
     cd teste-credito-banco
     ```
 2.  Construa as imagens e inicie todos os contêineres:
